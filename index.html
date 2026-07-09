@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <style>
         :root {
-            --primary: #db4b4b; /* Colore tema Espanso */
+            --primary: #db4b4b;
             --primary-hover: #c43c3c;
             --bg: #f5f5f7;
             --surface: #ffffff;
@@ -164,6 +164,11 @@
         .form-group label { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 500; }
         .empty-state { text-align: center; color: #888; padding: 40px 0; grid-column: 1 / -1; }
 
+        /* Guide Formatting */
+        .guide-section { margin-bottom: 24px; font-size: 14px; line-height: 1.5; }
+        .guide-section h4 { margin: 0 0 8px 0; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .code-block { background: #e5e5ea; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; white-space: pre-wrap; margin-top: 8px; }
+
         /* Table for Cheat Sheet */
         table.cheat-sheet { width: 100%; border-collapse: collapse; text-align: left; }
         table.cheat-sheet th, table.cheat-sheet td { padding: 12px; border-bottom: 1px solid var(--border); }
@@ -180,20 +185,77 @@
             <div class="storage-status">💾 Dati salvati nel browser</div>
         </div>
         <div style="display: flex; gap: 8px;">
-            <button class="secondary" onclick="openYamlModal('import')">📥 Importa base.yml</button>
-            <button class="secondary" onclick="openYamlModal('export')">📤 Esporta base.yml</button>
+            <input type="file" id="fileInput" accept=".yml,.yaml" style="display: none;" onchange="handleFileSelect(event)">
+            
+            <button class="secondary" onclick="triggerImport()">📥 Importa base.yml</button>
+            <button class="secondary" onclick="triggerExport()">📤 Esporta base.yml</button>
+            <button class="secondary" onclick="triggerCopy()">📋 Copia YAML</button>
         </div>
     </header>
 
     <div class="toolbar">
         <button onclick="openSnippetModal()">➕ Nuova Abbreviazione</button>
-        <button class="secondary" onclick="openCheatSheetModal()">📋 Elenco Abbreviazioni (Cheat Sheet)</button>
+        <button class="secondary" onclick="openCheatSheetModal()">📋 Elenco (Cheat Sheet)</button>
+        <button class="secondary" onclick="document.getElementById('guideModal').showModal()">💡 Guida Variabili</button>
         <button class="danger" onclick="clearAll()" style="margin-left: auto;">🗑 Svuota</button>
     </div>
 
     <div class="snippets-grid" id="snippets-container">
         </div>
 </div>
+
+<dialog id="guideModal" style="max-width: 700px; width: 95%;">
+    <h3 class="modal-header">💡 Guida alle Variabili di Espanso</h3>
+    <div style="max-height: 60vh; overflow-y: auto; margin-bottom: 20px;">
+        
+        <p style="font-size: 14px; margin-top: 0;">Espanso supporta l'inserimento di contenuti dinamici chiamati "Variabili". Ecco le sintassi dei formati intelligenti più utili.</p>
+
+        <div class="guide-section">
+            <h4>1. Posizionamento del Cursore</h4>
+            <p>Usa la stringa <code>$|$</code> all'interno del tuo testo. Espanso incollerà tutto e poi posizionerà il cursore lampeggiante esattamente in quel punto, pronto per farti scrivere.</p>
+            <div class="code-block">Gentile $|$, ti scrivo in merito alla pratica...</div>
+        </div>
+
+        <div class="guide-section">
+            <h4>2. Data e Ora Corrente</h4>
+            <p>Per inserire la data di oggi in modo automatico, usa la variabile <code>{{mydate}}</code> nel testo e definisci il formato nel blocco vars.</p>
+            <div class="code-block">replace: "Oggi è il {{mydate}}"
+vars:
+  - name: mydate
+    type: date
+    params:
+      format: "%d/%m/%Y"</div>
+        </div>
+
+        <div class="guide-section">
+            <h4>3. Comandi di Sistema (Shell)</h4>
+            <p>Utile se vuoi eseguire un comando dal terminale e incollare l'output direttamente nel testo.</p>
+            <div class="code-block">replace: "Il mio IP locale è: {{ip}}"
+vars:
+  - name: ip
+    type: shell
+    params:
+      cmd: "ipconfig getifaddr en0"</div>
+        </div>
+
+        <div class="guide-section">
+            <h4>4. Incolla Dagli Appunti (Clipboard)</h4>
+            <p>Permette di prendere il testo che hai attualmente copiato negli appunti e avvolgerlo in una frase standard.</p>
+            <div class="code-block">replace: "Codice di tracciamento copiato: {{clipboard}}"
+vars:
+  - name: clipboard
+    type: clipboard</div>
+        </div>
+
+        <p style="font-size: 13px; color: #666; font-style: italic; background: #fafafa; padding: 10px; border-radius: 6px; border: 1px solid #e5e5ea;">
+            <strong>Nota di utilizzo:</strong> Attualmente questo editor visuale permette di modificare comodamente il "Trigger" e il testo base ("Replace"). Se desideri aggiungere o modificare le configurazioni complesse delle variabili (il blocco `vars:`), puoi scriverle manualmente nel file base.yml e re-importarlo qui. L'app le conserverà in memoria in modo sicuro senza cancellarle!
+        </p>
+
+    </div>
+    <div class="modal-actions">
+        <button onclick="document.getElementById('guideModal').close()">Chiudi</button>
+    </div>
+</dialog>
 
 <dialog id="snippetModal">
     <h3 class="modal-header" id="snippetModalTitle">Aggiungi Abbreviazione</h3>
@@ -211,16 +273,6 @@
     <div class="modal-actions">
         <button class="secondary" onclick="document.getElementById('snippetModal').close()">Annulla</button>
         <button onclick="saveSnippet()">Salva</button>
-    </div>
-</dialog>
-
-<dialog id="yamlModal">
-    <h3 class="modal-header" id="yamlModalTitle">Codice YAML</h3>
-    <p style="font-size: 13px; color: #666; margin-top: 0;">Nota: l'importazione rimuoverà i commenti (#) dal codice originale.</p>
-    <textarea id="yamlTextarea" placeholder="Incolla il contenuto di base.yml..."></textarea>
-    <div class="modal-actions">
-        <button class="secondary" onclick="document.getElementById('yamlModal').close()">Annulla</button>
-        <button id="yamlModalBtn" onclick="processYamlModal()">Salva</button>
     </div>
 </dialog>
 
@@ -270,6 +322,72 @@
         }
     }
 
+    // --- Gestione File (Integrazione Finder e Appunti) ---
+    function triggerImport() {
+        document.getElementById('fileInput').click();
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const contents = e.target.result;
+            try {
+                const parsed = jsyaml.load(contents);
+                if (parsed && parsed.matches && Array.isArray(parsed.matches)) {
+                    espansoMatches = parsed.matches;
+                    saveState();
+                    alert("File base.yml importato con successo!");
+                } else {
+                    alert("Formato non valido. Il file deve contenere la chiave 'matches:'.");
+                }
+            } catch (err) {
+                alert("Errore di sintassi nel codice YAML.");
+                console.error(err);
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function triggerExport() {
+        if (espansoMatches.length === 0) {
+            alert("Nessun dato da esportare.");
+            return;
+        }
+        
+        const outputObj = { matches: espansoMatches };
+        const yamlString = jsyaml.dump(outputObj, { lineWidth: -1 });
+
+        const blob = new Blob([yamlString], { type: "text/yaml;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "base.yml";
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function triggerCopy() {
+        if (espansoMatches.length === 0) {
+            alert("Nessun dato da copiare.");
+            return;
+        }
+
+        const outputObj = { matches: espansoMatches };
+        const yamlString = jsyaml.dump(outputObj, { lineWidth: -1 });
+
+        navigator.clipboard.writeText(yamlString).then(() => {
+            alert("Codice YAML copiato negli appunti!");
+        }).catch(err => {
+            console.error('Errore durante la copia: ', err);
+            alert("Impossibile copiare il testo. Verifica i permessi del browser.");
+        });
+    }
+
     // --- Gestione Modali Form ---
     function openSnippetModal(index = null) {
         const modal = document.getElementById('snippetModal');
@@ -302,7 +420,6 @@
         const newObj = { trigger: trigger, replace: replace };
 
         if (id !== '') {
-            // Mantieni eventuali variabili avanzate se esistevano
             espansoMatches[id] = { ...espansoMatches[id], ...newObj };
         } else {
             espansoMatches.push(newObj);
@@ -310,57 +427,6 @@
 
         saveState();
         document.getElementById('snippetModal').close();
-    }
-
-    // --- Gestione YAML (js-yaml) ---
-    let currentYamlMode = '';
-
-    function openYamlModal(mode) {
-        currentYamlMode = mode;
-        const modal = document.getElementById('yamlModal');
-        const ta = document.getElementById('yamlTextarea');
-        const title = document.getElementById('yamlModalTitle');
-        const btn = document.getElementById('yamlModalBtn');
-
-        if (mode === 'import') {
-            title.textContent = "Importa base.yml";
-            ta.value = "";
-            ta.readOnly = false;
-            btn.textContent = "Importa e Sovrascrivi";
-        } else {
-            title.textContent = "Esporta base.yml";
-            // Costruisci oggetto root per Espanso
-            const outputObj = { matches: espansoMatches };
-            ta.value = jsyaml.dump(outputObj, { lineWidth: -1 });
-            ta.readOnly = true;
-            btn.textContent = "Copia negli appunti";
-        }
-        modal.showModal();
-    }
-
-    function processYamlModal() {
-        const ta = document.getElementById('yamlTextarea');
-        
-        if (currentYamlMode === 'export') {
-            navigator.clipboard.writeText(ta.value).then(() => {
-                alert("YAML copiato! Incollalo nel tuo file base.yml.");
-                document.getElementById('yamlModal').close();
-            });
-        } else {
-            try {
-                const parsed = jsyaml.load(ta.value);
-                if (parsed && parsed.matches && Array.isArray(parsed.matches)) {
-                    espansoMatches = parsed.matches;
-                    saveState();
-                    document.getElementById('yamlModal').close();
-                } else {
-                    alert("Formato non valido. Il file deve contenere la chiave 'matches:'.");
-                }
-            } catch (e) {
-                alert("Errore di sintassi nel codice YAML.");
-                console.error(e);
-            }
-        }
     }
 
     // --- Gestione Cheat Sheet ---
@@ -373,7 +439,6 @@
             let html = `<thead><tr><th>Trigger</th><th>Risultato (Replace)</th></tr></thead><tbody>`;
             espansoMatches.forEach(match => {
                 let textPreview = match.replace || '';
-                // Tronca se troppo lungo per la tabella
                 if(textPreview.length > 80) textPreview = textPreview.substring(0, 80) + '...';
                 
                 html += `<tr>
@@ -398,7 +463,6 @@
 
         let html = '';
         espansoMatches.forEach((match, index) => {
-            // Se ci sono script/variabili avanzate, mostralo con un badge
             const hasVars = match.vars ? '<span title="Contiene variabili dinamiche" style="font-size:16px;">⚙️</span>' : '';
             
             html += `
