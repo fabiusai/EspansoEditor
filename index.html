@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espanso Visual Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <style>
+        :root {
+            --primary: #db4b4b; /* Colore tema Espanso */
+            --primary-hover: #c43c3c;
+            --bg: #f5f5f7;
+            --surface: #ffffff;
+            --text: #1d1d1f;
+            --border: #d2d2d7;
+            --danger: #ff3b30;
+            --radius: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--surface);
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        h1 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        
+        .storage-status { font-size: 12px; color: #34c759; font-weight: 500; margin-top: 4px; }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        button:hover { background-color: var(--primary-hover); }
+        button.secondary { background-color: #e5e5ea; color: var(--text); }
+        button.secondary:hover { background-color: #d1d1d6; }
+        button.danger { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); }
+        button.danger:hover { background-color: #ffe5e5; }
+        button.icon-btn { padding: 6px; font-size: 14px; }
+
+        /* Grid layout for snippets */
+        .snippets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .snippet-card {
+            background: #fafafa;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .snippet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .trigger-badge {
+            background: var(--text);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .snippet-body {
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            background: var(--surface);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e5e5ea;
+            flex-grow: 1;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .snippet-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        /* Modals */
+        dialog {
+            border: none;
+            border-radius: var(--radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 24px;
+            width: 90%;
+            max-width: 600px;
+        }
+        dialog::backdrop { background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); }
+
+        .modal-header { margin-top: 0; margin-bottom: 16px; font-size: 18px; }
+        
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-sizing: border-box;
+            font-family: monospace;
+            margin-bottom: 16px;
+        }
+        
+        textarea { height: 200px; resize: vertical; }
+        
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 500; }
+        .empty-state { text-align: center; color: #888; padding: 40px 0; grid-column: 1 / -1; }
+
+        /* Table for Cheat Sheet */
+        table.cheat-sheet { width: 100%; border-collapse: collapse; text-align: left; }
+        table.cheat-sheet th, table.cheat-sheet td { padding: 12px; border-bottom: 1px solid var(--border); }
+        table.cheat-sheet th { background: #f0f0f0; }
+        table.cheat-sheet td.trigger-col { font-family: monospace; font-weight: bold; white-space: nowrap; width: 1%; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Espanso Editor</h1>
+            <div class="storage-status">💾 Dati salvati nel browser</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button class="secondary" onclick="openYamlModal('import')">📥 Importa base.yml</button>
+            <button class="secondary" onclick="openYamlModal('export')">📤 Esporta base.yml</button>
+        </div>
+    </header>
+
+    <div class="toolbar">
+        <button onclick="openSnippetModal()">➕ Nuova Abbreviazione</button>
+        <button class="secondary" onclick="openCheatSheetModal()">📋 Elenco Abbreviazioni (Cheat Sheet)</button>
+        <button class="danger" onclick="clearAll()" style="margin-left: auto;">🗑 Svuota</button>
+    </div>
+
+    <div class="snippets-grid" id="snippets-container">
+        </div>
+</div>
+
+<dialog id="snippetModal">
+    <h3 class="modal-header" id="snippetModalTitle">Aggiungi Abbreviazione</h3>
+    <input type="hidden" id="snippetId">
+    
+    <div class="form-group">
+        <label>Trigger (es. :saluti)</label>
+        <input type="text" id="snippetTrigger" placeholder=":abbreviazione">
+    </div>
+    <div class="form-group">
+        <label>Testo da incollare (Replace)</label>
+        <textarea id="snippetReplace" placeholder="Inserisci qui il testo completo..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+        <button class="secondary" onclick="document.getElementById('snippetModal').close()">Annulla</button>
+        <button onclick="saveSnippet()">Salva</button>
+    </div>
+</dialog>
+
+<dialog id="yamlModal">
+    <h3 class="modal-header" id="yamlModalTitle">Codice YAML</h3>
+    <p style="font-size: 13px; color: #666; margin-top: 0;">Nota: l'importazione rimuoverà i commenti (#) dal codice originale.</p>
+    <textarea id="yamlTextarea" placeholder="Incolla il contenuto di base.yml..."></textarea>
+    <div class="modal-actions">
+        <button class="secondary" onclick="document.getElementById('yamlModal').close()">Annulla</button>
+        <button id="yamlModalBtn" onclick="processYamlModal()">Salva</button>
+    </div>
+</dialog>
+
+<dialog id="cheatSheetModal" style="max-width: 800px; width: 95%;">
+    <h3 class="modal-header">Elenco Abbreviazioni</h3>
+    <div style="max-height: 60vh; overflow-y: auto; margin-bottom: 20px;">
+        <table class="cheat-sheet" id="cheatSheetTable">
+            </table>
+    </div>
+    <div class="modal-actions">
+        <button onclick="document.getElementById('cheatSheetModal').close()">Chiudi</button>
+    </div>
+</dialog>
+
+<script>
+    const STORAGE_KEY = 'espanso_editor_data';
+    let espansoMatches = [];
+
+    // --- Inizializzazione ---
+    function loadState() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                espansoMatches = JSON.parse(saved);
+            } catch (e) { console.error("Errore parser localStorage"); espansoMatches = []; }
+        }
+        renderGrid();
+    }
+
+    function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(espansoMatches));
+        renderGrid();
+    }
+
+    // --- Operazioni CRUD ---
+    function deleteSnippet(index) {
+        if(confirm("Eliminare questa abbreviazione?")) {
+            espansoMatches.splice(index, 1);
+            saveState();
+        }
+    }
+
+    function clearAll() {
+        if(confirm("Vuoi cancellare tutto il database locale?")) {
+            espansoMatches = [];
+            saveState();
+        }
+    }
+
+    // --- Gestione Modali Form ---
+    function openSnippetModal(index = null) {
+        const modal = document.getElementById('snippetModal');
+        const title = document.getElementById('snippetModalTitle');
+        
+        if (index !== null) {
+            title.textContent = "Modifica Abbreviazione";
+            document.getElementById('snippetId').value = index;
+            document.getElementById('snippetTrigger').value = espansoMatches[index].trigger || '';
+            document.getElementById('snippetReplace').value = espansoMatches[index].replace || '';
+        } else {
+            title.textContent = "Nuova Abbreviazione";
+            document.getElementById('snippetId').value = '';
+            document.getElementById('snippetTrigger').value = '';
+            document.getElementById('snippetReplace').value = '';
+        }
+        modal.showModal();
+    }
+
+    function saveSnippet() {
+        const trigger = document.getElementById('snippetTrigger').value.trim();
+        const replace = document.getElementById('snippetReplace').value;
+        const id = document.getElementById('snippetId').value;
+
+        if (!trigger || !replace) {
+            alert("Compila entrambi i campi!");
+            return;
+        }
+
+        const newObj = { trigger: trigger, replace: replace };
+
+        if (id !== '') {
+            // Mantieni eventuali variabili avanzate se esistevano
+            espansoMatches[id] = { ...espansoMatches[id], ...newObj };
+        } else {
+            espansoMatches.push(newObj);
+        }
+
+        saveState();
+        document.getElementById('snippetModal').close();
+    }
+
+    // --- Gestione YAML (js-yaml) ---
+    let currentYamlMode = '';
+
+    function openYamlModal(mode) {
+        currentYamlMode = mode;
+        const modal = document.getElementById('yamlModal');
+        const ta = document.getElementById('yamlTextarea');
+        const title = document.getElementById('yamlModalTitle');
+        const btn = document.getElementById('yamlModalBtn');
+
+        if (mode === 'import') {
+            title.textContent = "Importa base.yml";
+            ta.value = "";
+            ta.readOnly = false;
+            btn.textContent = "Importa e Sovrascrivi";
+        } else {
+            title.textContent = "Esporta base.yml";
+            // Costruisci oggetto root per Espanso
+            const outputObj = { matches: espansoMatches };
+            ta.value = jsyaml.dump(outputObj, { lineWidth: -1 });
+            ta.readOnly = true;
+            btn.textContent = "Copia negli appunti";
+        }
+        modal.showModal();
+    }
+
+    function processYamlModal() {
+        const ta = document.getElementById('yamlTextarea');
+        
+        if (currentYamlMode === 'export') {
+            navigator.clipboard.writeText(ta.value).then(() => {
+                alert("YAML copiato! Incollalo nel tuo file base.yml.");
+                document.getElementById('yamlModal').close();
+            });
+        } else {
+            try {
+                const parsed = jsyaml.load(ta.value);
+                if (parsed && parsed.matches && Array.isArray(parsed.matches)) {
+                    espansoMatches = parsed.matches;
+                    saveState();
+                    document.getElementById('yamlModal').close();
+                } else {
+                    alert("Formato non valido. Il file deve contenere la chiave 'matches:'.");
+                }
+            } catch (e) {
+                alert("Errore di sintassi nel codice YAML.");
+                console.error(e);
+            }
+        }
+    }
+
+    // --- Gestione Cheat Sheet ---
+    function openCheatSheetModal() {
+        const table = document.getElementById('cheatSheetTable');
+        
+        if (espansoMatches.length === 0) {
+            table.innerHTML = "<tr><td>Nessuna abbreviazione presente.</td></tr>";
+        } else {
+            let html = `<thead><tr><th>Trigger</th><th>Risultato (Replace)</th></tr></thead><tbody>`;
+            espansoMatches.forEach(match => {
+                let textPreview = match.replace || '';
+                // Tronca se troppo lungo per la tabella
+                if(textPreview.length > 80) textPreview = textPreview.substring(0, 80) + '...';
+                
+                html += `<tr>
+                    <td class="trigger-col">${match.trigger}</td>
+                    <td style="white-space: pre-wrap; font-size: 13px;">${textPreview}</td>
+                </tr>`;
+            });
+            html += `</tbody>`;
+            table.innerHTML = html;
+        }
+        
+        document.getElementById('cheatSheetModal').showModal();
+    }
+
+    // --- Rendering Grafico ---
+    function renderGrid() {
+        const container = document.getElementById('snippets-container');
+        if (espansoMatches.length === 0) {
+            container.innerHTML = `<div class="empty-state">Nessuna abbreviazione trovata. Importa il tuo base.yml o creane una nuova.</div>`;
+            return;
+        }
+
+        let html = '';
+        espansoMatches.forEach((match, index) => {
+            // Se ci sono script/variabili avanzate, mostralo con un badge
+            const hasVars = match.vars ? '<span title="Contiene variabili dinamiche" style="font-size:16px;">⚙️</span>' : '';
+            
+            html += `
+            <div class="snippet-card">
+                <div class="snippet-header">
+                    <span class="trigger-badge">${match.trigger}</span>
+                    ${hasVars}
+                </div>
+                <div class="snippet-body">${match.replace || '&lt;Nessun testo assegnato&gt;'}</div>
+                <div class="snippet-actions">
+                    <button class="icon-btn secondary" onclick="openSnippetModal(${index})">✏️ Modifica</button>
+                    <button class="icon-btn danger" onclick="deleteSnippet(${index})">🗑 Elimina</button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    // Avvio
+    loadState();
+</script>
+</body>
+</html>
