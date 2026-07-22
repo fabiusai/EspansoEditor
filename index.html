@@ -322,15 +322,170 @@ vars:
         }
     }
 
-    // --- Gestione File (Integrazione Finder e Appunti) ---
-    function triggerImport() {
+    // --- Gestione File (Integrazione Finder, Drag & Drop e Appunti) ---
+    let activeFileHandle = null;
+
+    // Supporto Drag & Drop su tutta la finestra
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.opacity = '0.7';
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.opacity = '1';
+    });
+
+    window.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.opacity = '1';
+
+        const items = e.dataTransfer.items;
+        if (items && items[0]) {
+            const item = items[0];
+            if (item.getAsFileSystemHandle) {
+                try {
+                    const handle = await item.getAsFileSystemHandle();
+                    if (handle && handle.kind === 'file') {
+                        activeFileHandle = handle;
+                        const file = await activeFileHandle.getFile();
+                        readAndParseFile(file);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("Errore FileSystemHandle nel drop, fallback standard.", err);
+                }
+            }
+        }
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            activeFileHandle = null;
+            readAndParseFile(files[0]);
+        }
+    });
+
+    async // --- Gestione File (Integrazione Drag & Drop Modale e Sovrascrittura) ---
+    let activeFileHandle = null;
+
+    // Iniezione dinamica della Modale per il Drag & Drop (mantenendo lo stile modale esistente)
+    const importModalHTML = `
+    <dialog id="importModal" style="max-width: 520px; width: 90%; text-align: center;">
+        <h3 class="modal-header" style="margin-top: 0; margin-bottom: 12px;">📥 Importa Configurazione</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 20px;">Trascina e rilascia qui il tuo file <strong>base.yml</strong>. Verrà memorizzato il collegamento per sovrascriverlo direttamente al successivo salvataggio.</p>
+        <div id="dropZoneArea" style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px 20px; background: #fafafa; cursor: pointer; transition: all 0.2s; margin-bottom: 20px;">
+            <div style="font-size: 40px; margin-bottom: 10px;">📂</div>
+            <div style="font-weight: 500; font-size: 15px; color: var(--text);">Trascina qui il file .yml o .yaml</div>
+            <div style="font-size: 12px; color: #888; margin-top: 6px;">(oppure clicca per aprirlo tradizionalmente)</div>
+        </div>
+        <div class="modal-actions">
+            <button class="secondary" onclick="document.getElementById('importModal').close()">Annulla</button>
+        </div>
+    </dialog>`;
+    document.body.insertAdjacentHTML('beforeend', importModalHTML);
+
+    const dropZone = document.getElementById('dropZoneArea');
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.style.background = '#ffe5e5';
+            dropZone.style.borderColor = 'var(--primary)';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.style.background = '#fafafa';
+            dropZone.style.borderColor = 'var(--border)';
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', async (e) => {
+        const items = e.dataTransfer.items;
+        if (items && items[0] && items[0].getAsFileSystemHandle) {
+            try {
+                const handle = await items[0].getAsFileSystemHandle();
+                if (handle && handle.kind === 'file') {
+                    activeFileHandle = handle;
+                    const file = await activeFileHandle.getFile();
+                    readAndParseFile(file);
+                    return;
+                }
+            } catch (err) {
+                console.warn("Fallback su lettura file standard", err);
+            }
+        }
+        
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            activeFileHandle = null;
+            readAndParseFile(files[0]);
+        }
+    });
+
+    dropZone.addEventListener('click', async () => {
+        if (window.showOpenFilePicker) {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{ description: 'File YAML', accept: { 'text/yaml': ['.yml', '.yaml'], 'application/x-yaml': ['.yml', '.yaml'] } }],
+                    multiple: false
+                });
+                activeFileHandle = handle;
+                const file = await activeFileHandle.getFile();
+                readAndParseFile(file);
+                return;
+            } catch (err) {
+                if (err.name !== 'AbortError') console.error(err);
+                return;
+            }
+        }
         document.getElementById('fileInput').click();
+    });
+
+    // Supporto Drag & Drop globale di sicurezza sulla finestra
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        if (document.getElementById('importModal').open) return;
+        
+        const items = e.dataTransfer.items;
+        if (items && items[0] && items[0].getAsFileSystemHandle) {
+            try {
+                const handle = await items[0].getAsFileSystemHandle();
+                if (handle && handle.kind === 'file') {
+                    activeFileHandle = handle;
+                    const file = await activeFileHandle.getFile();
+                    readAndParseFile(file);
+                    return;
+                }
+            } catch (err) {}
+        }
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            activeFileHandle = null;
+            readAndParseFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    function triggerImport() {
+        document.getElementById('importModal').showModal();
     }
 
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
+        activeFileHandle = null;
+        readAndParseFile(file);
+        event.target.value = '';
+    }
 
+    function readAndParseFile(file) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const contents = e.target.result;
@@ -339,7 +494,10 @@ vars:
                 if (parsed && parsed.matches && Array.isArray(parsed.matches)) {
                     espansoMatches = parsed.matches;
                     saveState();
-                    alert("File base.yml importato con successo!");
+                    updateFileStatus(file.name);
+                    const modal = document.getElementById('importModal');
+                    if (modal && modal.open) modal.close();
+                    alert(`File "${file.name}" importato con successo!`);
                 } else {
                     alert("Formato non valido. Il file deve contenere la chiave 'matches:'.");
                 }
@@ -347,12 +505,20 @@ vars:
                 alert("Errore di sintassi nel codice YAML.");
                 console.error(err);
             }
-            event.target.value = '';
         };
         reader.readAsText(file);
     }
 
-    function triggerExport() {
+    function updateFileStatus(fileName) {
+        const statusEl = document.querySelector('.storage-status');
+        if (statusEl) {
+            const modeText = activeFileHandle ? ' (Sovrascrittura diretta abilitata)' : ' (Modalità download standard)';
+            statusEl.textContent = `💾 File attivo: ${fileName}${modeText}`;
+            statusEl.style.color = activeFileHandle ? '#007aff' : '#34c759';
+        }
+    }
+
+    async function triggerExport() {
         if (espansoMatches.length === 0) {
             alert("Nessun dato da esportare.");
             return;
@@ -361,14 +527,27 @@ vars:
         const outputObj = { matches: espansoMatches };
         const yamlString = jsyaml.dump(outputObj, { lineWidth: -1 });
 
+        if (activeFileHandle) {
+            try {
+                const writable = await activeFileHandle.createWritable();
+                await writable.write(yamlString);
+                await writable.close();
+                alert(`File "${activeFileHandle.name}" sovrascritto e salvato con successo!`);
+                return;
+            } catch (err) {
+                console.warn("Impossibile sovrascrivere direttamente, procedo con il download standard.", err);
+            }
+        }
+
         const blob = new Blob([yamlString], { type: "text/yaml;charset=utf-8" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = "base.yml";
+        link.download = activeFileHandle && activeFileHandle.name ? activeFileHandle.name : "base.yml";
         
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
     }
 
     function triggerCopy() {
