@@ -322,53 +322,7 @@ vars:
         }
     }
 
-    // --- Gestione File (Integrazione Finder, Drag & Drop e Appunti) ---
-    let activeFileHandle = null;
-
-    // Supporto Drag & Drop su tutta la finestra
-    window.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        document.body.style.opacity = '0.7';
-    });
-
-    window.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        document.body.style.opacity = '1';
-    });
-
-    window.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        document.body.style.opacity = '1';
-
-        const items = e.dataTransfer.items;
-        if (items && items[0]) {
-            const item = items[0];
-            if (item.getAsFileSystemHandle) {
-                try {
-                    const handle = await item.getAsFileSystemHandle();
-                    if (handle && handle.kind === 'file') {
-                        activeFileHandle = handle;
-                        const file = await activeFileHandle.getFile();
-                        readAndParseFile(file);
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("Errore FileSystemHandle nel drop, fallback standard.", err);
-                }
-            }
-        }
-
-        const files = e.dataTransfer.files;
-        if (files && files.length > 0) {
-            activeFileHandle = null;
-            readAndParseFile(files[0]);
-        }
-    });
-
-    async // --- Gestione File (Integrazione Drag & Drop Modale e Sovrascrittura) ---
+    // --- Gestione File (Integrazione Drag & Drop Modale e Sovrascrittura) ---
     let activeFileHandle = null;
 
     // Iniezione dinamica della Modale per il Drag & Drop (mantenendo lo stile modale esistente)
@@ -547,7 +501,6 @@ vars:
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    }
     }
 
     function triggerCopy() {
